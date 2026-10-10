@@ -11,28 +11,42 @@ bundled API keys, or install scripts.
 
 ## Install
 
-Requires OpenCode's v1 plugin API; tested with **OpenCode 1.18.35**. OpenCode v2
-has a different plugin API and has not been validated with this release.
+Supports OpenCode v1 and v2 from the same package. OpenCode v1 support requires
+**OpenCode 1.18.29** or newer; tested with **OpenCode 1.18.35**. OpenCode v2
+support targets the V2 plugin API and configuration shape.
 You also need a Graphify account with an accessible indexed repository and a
 working model provider in OpenCode. Graphify sign-in is separate from model-provider sign-in.
 
-Add this entry to your existing `opencode.json` (project) or
+For OpenCode v1, add this entry to your existing `opencode.json` (project) or
 `~/.config/opencode/opencode.json` (global), keeping any existing plugin entries:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["graphify-opencode@1.0.0"]
+  "plugin": ["graphify-opencode@1.1.0"]
 }
 ```
 
-OpenCode installs npm plugins at startup. From the configured project, sign in:
+For OpenCode v2, use `plugins`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["graphify-opencode@1.1.0"]
+}
+```
+
+OpenCode installs npm plugins at startup. From the configured project, sign in
+with your OpenCode binary:
 
 ```sh
 opencode mcp auth graphify
 opencode mcp list
 opencode
 ```
+
+With OpenCode v2, use the binary your v2 installation exposes; some builds use
+`opencode2`, while newer dev builds may use `opencode`.
 
 Complete Graphify sign-in in the browser while the terminal remains running.
 In OpenCode, try:
@@ -52,9 +66,11 @@ The plugin adds a `graphify` MCP entry in memory only when one is absent. It doe
 not rewrite your configuration file or replace an existing connection. It also
 preserves an existing `/graphify` command and your tool and permission settings.
 Plugin-specific guidance is active only for an enabled remote `graphify` entry
-whose URL is exactly `https://api.graphify.com/mcp`.
+whose URL is exactly `https://api.graphify.com/mcp`. In OpenCode v2, that server
+is managed through `mcp.servers.graphify` and uses `disabled: true` to opt out.
 
-To disable Graphify, add this to your configuration and restart OpenCode:
+To disable Graphify in OpenCode v1, add this to your configuration and restart
+OpenCode:
 
 ```json
 {
@@ -64,8 +80,22 @@ To disable Graphify, add this to your configuration and restart OpenCode:
 }
 ```
 
+In OpenCode v2:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "graphify": { "type": "remote", "url": "https://api.graphify.com/mcp", "disabled": true }
+    }
+  }
+}
+```
+
 You can use the hosted MCP without this plugin, or configure it explicitly if
 your OpenCode build does not expose plugin-added servers to its MCP commands:
+
+OpenCode v1:
 
 ```json
 {
@@ -76,6 +106,28 @@ your OpenCode build does not expose plugin-added servers to its MCP commands:
       "url": "https://api.graphify.com/mcp",
       "enabled": true,
       "timeout": 15000
+    }
+  }
+}
+```
+
+OpenCode v2:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "graphify": {
+        "type": "remote",
+        "url": "https://api.graphify.com/mcp",
+        "disabled": false,
+        "timeout": {
+          "startup": 15000,
+          "catalog": 15000,
+          "execution": 15000
+        }
+      }
     }
   }
 }
@@ -126,9 +178,11 @@ npm run check
 npm pack --dry-run
 ```
 
-The package exports one v1 plugin function. Unit tests exercise registration,
+The package exports one default object: OpenCode v2 calls `setup(ctx)`, while
+OpenCode v1 calls `server()`. Unit tests exercise v1 and v2 registration,
 configuration preservation, disabled connections, and isolated guidance.
 
 [Website](https://graphify.com) · [Documentation](https://docs.graphify.com) ·
 [Support](mailto:founders@graphify.com) ·
-[OpenCode plugins](https://opencode.ai/docs/plugins/)
+[OpenCode plugins](https://opencode.ai/docs/plugins/) ·
+[OpenCode v2 plugins](https://dev.opencode.ai/v2/docs/build/plugins/)

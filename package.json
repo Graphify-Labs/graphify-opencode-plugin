@@ -1,6 +1,6 @@
 {
   "name": "graphify-opencode",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Graphify code intelligence and repository memory for OpenCode, connected through native MCP OAuth.",
   "type": "module",
   "main": "./src/index.js",
