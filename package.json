@@ -1,6 +1,6 @@
 {
   "name": "graphify-opencode",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Graphify code intelligence and repository memory for OpenCode, connected through native MCP OAuth.",
   "type": "module",
   "main": "./src/index.js",
@@ -11,13 +11,26 @@
       "default": "./src/index.js"
     }
   },
-  "files": ["src", "examples", "LICENSE", "README.md", "CHANGELOG.md"],
+  "files": [
+    "src",
+    "examples",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "test": "node --test",
     "check": "tsc --noEmit --allowJs --checkJs --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck src/index.js",
     "prepublishOnly": "npm test && npm run check"
   },
-  "keywords": ["opencode", "opencode-plugin", "graphify", "mcp", "code-intelligence", "knowledge-graph"],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "graphify",
+    "mcp",
+    "code-intelligence",
+    "knowledge-graph"
+  ],
   "author": "Graphify <founders@graphify.com>",
   "license": "MIT",
   "homepage": "https://graphify.com/mcp",
@@ -25,10 +38,15 @@
     "type": "git",
     "url": "git+https://github.com/Graphify-Labs/graphify-opencode-plugin.git"
   },
-  "bugs": {"url": "https://github.com/Graphify-Labs/graphify-opencode-plugin/issues"},
-  "publishConfig": {"access": "public"},
+  "bugs": {
+    "url": "https://github.com/Graphify-Labs/graphify-opencode-plugin/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@opencode-ai/plugin": "1.18.35",
+    "@opencode/plugin": "2.0.26",
     "typescript": "5.9.3"
   }
 }
