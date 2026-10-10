@@ -11,6 +11,7 @@ const v1ServerConfig = {
   timeout: 15000,
 };
 
+/** @type {import('@opencode/plugin').Mcp.RemoteConfig} */
 const v2ServerConfig = {
   type: "remote",
   url: endpoint,
@@ -46,41 +47,6 @@ function addV2Guidance(system) {
   system.push({ type: "text", text: guidance });
 }
 
-async function registerV2GuidanceHook(ctx, isActive) {
-  const addGuidance = (event) => {
-    if (!isActive() || !Array.isArray(event.system)) return;
-    addV2Guidance(event.system);
-  };
-
-  try {
-    await ctx.session.hook("context", addGuidance);
-  } catch (error) {
-    await ctx.session.hook("request", addGuidance);
-  }
-}
-
-function updateV2Command(commands) {
-  if (typeof commands.get === "function" && commands.get("graphify")) return;
-
-  if (typeof commands.update === "function") {
-    commands.update("graphify", (command) => {
-      command.description ??= commandDescription;
-      command.template ??= commandTemplate;
-    });
-    return;
-  }
-
-  if (typeof commands.add === "function") {
-    commands.add({
-      name: "graphify",
-      description: commandDescription,
-      async execute() {
-        throw new Error("The Graphify command requires OpenCode's template command API.");
-      },
-    });
-  }
-}
-
 /** @type {import('@opencode-ai/plugin').Plugin} */
 const createV1Server = async () => {
   let active = false;
@@ -112,6 +78,7 @@ const createV1Server = async () => {
   };
 };
 
+/** @type {import('@opencode/plugin').Plugin.Plugin['setup']} */
 async function setupV2(ctx) {
   let active = false;
 
@@ -126,11 +93,31 @@ async function setupV2(ctx) {
     active = isV2Active(server);
   });
 
-  if (active) {
-    await ctx.command.transform(updateV2Command);
+  // MCP transforms reconcile after setup; register the command independently.
+  const commands = await ctx.command.list();
+  if (!commands.data.some((command) => command.name === "graphify")) {
+    await ctx.command.transform((editor) => {
+      editor.add({
+        name: "graphify",
+        description: commandDescription,
+        async execute({ sessionID, prompt, delivery }) {
+          if (!active) {
+            throw new Error("Graphify MCP is not enabled at https://api.graphify.com/mcp. Check your MCP configuration and restart OpenCode.");
+          }
+          await ctx.session.prompt({
+            ...prompt,
+            sessionID,
+            text: commandTemplate.replace("$ARGUMENTS", () => prompt.text),
+            delivery,
+          });
+        },
+      });
+    });
   }
 
-  await registerV2GuidanceHook(ctx, () => active);
+  await ctx.session.hook("context", (event) => {
+    if (active) addV2Guidance(event.system);
+  });
 }
 
 const GraphifyPlugin = {

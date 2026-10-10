@@ -5,52 +5,53 @@ import { guidance } from "../src/guidance.js";
 
 const endpoint = "https://api.graphify.com/mcp";
 
-function createV2Context({ servers = {}, commands = {}, hookFailures = new Set() } = {}) {
+function createV2Context({ servers = {}, commands = {} } = {}) {
   const mcpServers = new Map(Object.entries(structuredClone(servers)));
   const commandMap = new Map(Object.entries(structuredClone(commands)));
   const sessionHooks = new Map();
+  const prompts = [];
+  const transforms = [];
 
   return {
     context: {
       mcp: {
         async transform(callback) {
-          callback({
-            list: () => [...mcpServers.entries()],
-            get: (name) => mcpServers.get(name),
-            set: (name, config) => mcpServers.set(name, structuredClone(config)),
-            update: (name, update) => {
-              const server = mcpServers.get(name);
-              if (!server) return;
-              update(server);
-            },
-            remove: (name) => mcpServers.delete(name),
-          });
+          transforms.push(callback);
+        },
+        async list() {
+          // MCP list reports resource status; it does not replay configuration transforms.
+          return { data: [] };
         },
       },
       command: {
+        async list() {
+          return { data: [...commandMap.values()] };
+        },
         async transform(callback) {
-          callback({
-            list: () => [...commandMap.values()],
-            get: (name) => commandMap.get(name),
-            update: (name, update) => {
-              const command = commandMap.get(name) ?? { name };
-              update(command);
-              commandMap.set(name, command);
-            },
-            remove: (name) => commandMap.delete(name),
-          });
+          // Current v2 CommandEditor only exposes add(), not update() or get().
+          callback({ add: (command) => commandMap.set(command.name, command) });
         },
       },
       session: {
         async hook(name, callback) {
-          if (hookFailures.has(name)) throw new Error(`Unsupported hook: ${name}`);
+          assert.equal(name, "context");
           sessionHooks.set(name, callback);
         },
+        async prompt(input) {
+          prompts.push(input);
+        },
       },
+    },
+    reconcile() {
+      for (const callback of transforms) callback({
+        get: (name) => mcpServers.get(name),
+        set: (name, config) => mcpServers.set(name, structuredClone(config)),
+      });
     },
     mcpServers,
     commandMap,
     sessionHooks,
+    prompts,
   };
 }
 
@@ -129,8 +130,11 @@ test("keeps connection state separate between OpenCode instances", async () => {
 });
 
 test("registers the hosted MCP, slash command, and guidance through OpenCode v2", async () => {
-  const { context, mcpServers, commandMap, sessionHooks } = createV2Context();
+  const { reconcile, context, mcpServers, commandMap, sessionHooks } = createV2Context();
   await GraphifyPlugin.setup(context);
+  assert.equal(typeof commandMap.get("graphify").execute, "function");
+  assert.equal(mcpServers.has("graphify"), false);
+  reconcile();
 
   assert.deepEqual(mcpServers.get("graphify"), {
     type: "remote",
@@ -142,7 +146,7 @@ test("registers the hosted MCP, slash command, and guidance through OpenCode v2"
       execution: 15000,
     },
   });
-  assert.match(commandMap.get("graphify").template, /\$ARGUMENTS/);
+  assert.equal(typeof commandMap.get("graphify").execute, "function");
   assert.equal(commandMap.get("graphify").description, "Investigate code and saved repository knowledge with Graphify");
 
   const event = { system: ["Original system instructions"] };
@@ -161,12 +165,13 @@ test("preserves existing active OpenCode v2 Graphify server and command settings
     timeout: { catalog: 25000 },
   };
   const command = { name: "graphify", description: "Mine", template: "My workflow" };
-  const { context, mcpServers, commandMap } = createV2Context({
+  const { reconcile, context, mcpServers, commandMap } = createV2Context({
     servers: { graphify: server },
     commands: { graphify: command },
   });
 
   await GraphifyPlugin.setup(context);
+  reconcile();
 
   assert.deepEqual(mcpServers.get("graphify"), server);
   assert.deepEqual(commandMap.get("graphify"), command);
@@ -178,28 +183,49 @@ for (const server of [
   { type: "remote", url: "https://example.com/mcp" },
   { type: "local", command: ["my-server"] },
 ]) {
-  test(`does not advertise an inactive/unrelated OpenCode v2 connection: ${JSON.stringify(server)}`, async () => {
-    const { context, mcpServers, commandMap, sessionHooks } = createV2Context({
+  test(`does not submit guidance for an inactive/unrelated OpenCode v2 connection: ${JSON.stringify(server)}`, async () => {
+    const { reconcile, context, mcpServers, commandMap, sessionHooks } = createV2Context({
       servers: { graphify: server },
     });
 
     await GraphifyPlugin.setup(context);
+    reconcile();
 
     assert.deepEqual(mcpServers.get("graphify"), server);
-    assert.equal(commandMap.has("graphify"), false);
+    await assert.rejects(
+      commandMap.get("graphify").execute({ sessionID: "test-session", prompt: { text: "Explain this repo" }, delivery: "steer" }),
+      /Graphify MCP is not enabled/,
+    );
     const event = { system: ["Original system instructions"] };
     await sessionHooks.get("context")(event);
     assert.deepEqual(event.system, ["Original system instructions"]);
   });
 }
 
-test("falls back to the OpenCode v2 request hook name when context is unavailable", async () => {
-  const { context, sessionHooks } = createV2Context({ hookFailures: new Set(["context"]) });
-
+test("v2 command forwards arguments literally, attachments, and delivery to the session", async () => {
+  const { reconcile, context, commandMap, prompts } = createV2Context();
   await GraphifyPlugin.setup(context);
+  reconcile();
+  const prompt = {
+    text: "Trace the $& handler and keep $ARGUMENTS literal",
+    files: [{ uri: "file:///repo/example.ts", name: "example.ts" }],
+    agents: [{ name: "build" }],
+  };
+  await commandMap.get("graphify").execute({ sessionID: "test-session", prompt, delivery: "queue" });
+  assert.equal(prompts.length, 1);
+  assert.equal(prompts[0].sessionID, "test-session");
+  assert.equal(prompts[0].delivery, "queue");
+  assert.deepEqual(prompts[0].files, prompt.files);
+  assert.deepEqual(prompts[0].agents, prompt.agents);
+  assert.ok(prompts[0].text.includes(prompt.text));
+  assert.ok(prompts[0].text.includes(guidance));
+});
 
-  assert.equal(sessionHooks.has("request"), true);
-  const event = { system: [] };
-  await sessionHooks.get("request")(event);
-  assert.deepEqual(event.system, [{ type: "text", text: guidance }]);
+test("v2 command accepts an empty request for the default repository overview", async () => {
+  const { reconcile, context, commandMap, prompts } = createV2Context();
+  await GraphifyPlugin.setup(context);
+  reconcile();
+  await commandMap.get("graphify").execute({ sessionID: "test-session", prompt: { text: "" }, delivery: "steer" });
+  assert.equal(prompts[0].text.includes("$ARGUMENTS"), false);
+  assert.match(prompts[0].text, /If no request was supplied/);
 });

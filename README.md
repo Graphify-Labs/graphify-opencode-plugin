@@ -13,7 +13,8 @@ bundled API keys, or install scripts.
 
 Supports OpenCode v1 and v2 from the same package. OpenCode v1 support requires
 **OpenCode 1.18.29** or newer; tested with **OpenCode 1.18.35**. OpenCode v2
-support targets the V2 plugin API and configuration shape.
+support is tested with **@opencode/cli 2.0.26**. Version **1.1.1** contains the
+v2 command compatibility fix; publish that release before using the npm examples below.
 You also need a Graphify account with an accessible indexed repository and a
 working model provider in OpenCode. Graphify sign-in is separate from model-provider sign-in.
 
@@ -23,7 +24,7 @@ For OpenCode v1, add this entry to your existing `opencode.json` (project) or
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["graphify-opencode@1.1.0"]
+  "plugin": ["graphify-opencode@1.1.1"]
 }
 ```
 
@@ -32,7 +33,7 @@ For OpenCode v2, use `plugins`:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["graphify-opencode@1.1.0"]
+  "plugins": ["graphify-opencode@1.1.1"]
 }
 ```
 
@@ -68,6 +69,8 @@ preserves an existing `/graphify` command and your tool and permission settings.
 Plugin-specific guidance is active only for an enabled remote `graphify` entry
 whose URL is exactly `https://api.graphify.com/mcp`. In OpenCode v2, that server
 is managed through `mcp.servers.graphify` and uses `disabled: true` to opt out.
+The v2 `/graphify` command remains listed when disabled, but refuses to submit a
+request until the Graphify connection is enabled. Restart after changing settings.
 
 To disable Graphify in OpenCode v1, add this to your configuration and restart
 OpenCode:
@@ -180,9 +183,12 @@ npm pack --dry-run
 
 The package exports one default object: OpenCode v2 calls `setup(ctx)`, while
 OpenCode v1 calls `server()`. Unit tests exercise v1 and v2 registration,
-configuration preservation, disabled connections, and isolated guidance.
+configuration preservation, deferred MCP registration, disabled connections, literal
+command arguments, attachments, delivery, and isolated guidance. The v2 native smoke
+test covers command registration, prompt admission, and the context hook; authenticated
+Graphify tool execution requires an account and is a separate check.
 
 [Website](https://graphify.com) · [Documentation](https://docs.graphify.com) ·
 [Support](mailto:founders@graphify.com) ·
 [OpenCode plugins](https://opencode.ai/docs/plugins/) ·
-[OpenCode v2 plugins](https://dev.opencode.ai/v2/docs/build/plugins/)
+[OpenCode v2 plugins](https://opencode.ai/v2/docs/build/plugins/)

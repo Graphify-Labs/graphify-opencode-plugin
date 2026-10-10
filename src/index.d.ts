@@ -1,8 +1,6 @@
-import type { Plugin } from "@opencode-ai/plugin";
-type Cleanup = () => Promise<void> | void;
-declare const GraphifyPlugin: {
+import type { Plugin } from "@opencode/plugin";
+declare const GraphifyPlugin: Plugin.Plugin & {
   readonly id: "graphify.opencode";
-  readonly setup: (context: unknown) => Promise<Cleanup | void> | Cleanup | void;
-  readonly server: Plugin;
+  readonly server: import("@opencode-ai/plugin").Plugin;
 };
 export default GraphifyPlugin;
